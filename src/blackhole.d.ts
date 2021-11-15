@@ -21,6 +21,8 @@ declare interface Window {
   REsetExpectMaxInstDrawFaceNum: (drawFace: number) => {};
   REsetPageLoadLev: (level: number = 2) => {};
   REsetMainSceAutoLoadDist: (projName: string, loadDist: number, unLoadDist: number) => {};
+  REsetEngineWorldCRS: Function;
+  REaddGeoCoord: Function;
 }
 
 interface Module {

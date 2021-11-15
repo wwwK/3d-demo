@@ -10,22 +10,25 @@
   </div>
 </template>
 
-<script lang="ts">
-import BlackHole from '@/utils/blackHole/blackHole'
-import { defineComponent } from 'vue'
+<script>
+import BlackHole from '@/utils/blackHole/blackHole.ts'
+import { defineComponent, onBeforeUnmount, onMounted } from 'vue'
 
 export default defineComponent({
   name: 'BlackHoleView',
 
-  mounted () {
-    const configuration = {
-      container: 'BlackHole'
-    }
-    window.BlackHoleInstance = new BlackHole(configuration)
-  },
+  setup () {
+    onMounted(() => {
+      const configuration = {
+        container: 'BlackHole'
+      }
+      window.BlackHoleInstance = new BlackHole(configuration)
+      // constructorBlackhole(configuration)
+    })
 
-  beforeUnmount () {
-    window.BlackHoleInstance.destroyEngine()
+    onBeforeUnmount(() => {
+      // window.BlackHoleInstance.destroyEngine()
+    })
   }
 })
 </script>

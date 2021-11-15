@@ -1,18 +1,21 @@
 <template>
   <div class="cesium-index">
-    <!-- <Cesium></Cesium> -->
+    <Cesium :value="content"></Cesium>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
+import { defineComponent, ref } from 'vue'
 import Cesium from '@/components/cesium/index.vue' // @ is an alias to /src
 
 export default defineComponent({
   name: 'CesiumIndex',
   components: {
     // HelloWorld
-    // Cesium
+    Cesium
+  },
+  setup () {
+    const content = ref('test')
   }
 })
 </script>

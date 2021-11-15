@@ -1,8 +1,9 @@
+//版本：v2.1.0.1082
 //场景初始化
 function REinitSys(strWorkerjsPath,uWidth,uHeight,strCommonUrl,strUserName,strPassWord){
   g_re_em_window_width = uWidth; 
   g_re_em_window_height = uHeight;
-  var bool =Module.RealBIMWeb.CreateEmuMgr(strWorkerjsPath,"BlackHole",uWidth, uHeight, 
+  var bool =Module.RealBIMWeb.CreateEmuMgr(strWorkerjsPath,"容东CIM施工现场数字化协同平台V2.0.0",uWidth, uHeight, 
                                   false, 500, "", strCommonUrl, "/ModuleDir/TempFile/", "/WebCache0001/", 
                                   strUserName, strPassWord);
   return bool;
@@ -94,8 +95,8 @@ function REloadMainSce(strUrlRes,strProjName,uVerInfo){
 //               "verInfo":0,
 //               "useTransInfo":false,
 //               "transInfo":"",
-//               "loadDist"1000:,>0表示绝对距离，<0表示距离阈值相对于项目包围盒尺寸的倍数，绝对值>1e20表示永不卸载
-//               "unLoadDist":5000
+//               "minLoadDist"1000, 
+//               "maxLoadDist":5000
 //             },{
 //               "projName":"proj02",
 //               "urlRes":"https://www.bjblackhole.cn:8009/default.aspx?dir=url_res03&path=",
@@ -104,60 +105,64 @@ function REloadMainSce(strUrlRes,strProjName,uVerInfo){
 //               "verInfo":0,
 //               "useTransInfo":false,
 //               "transInfo":"",
-//               "loadDist":-10,不能等于0，1e30默认加载且不卸载
-//               "unLoadDist":-50
+//               "minLoadDist":-10,
+//               "maxLoadDist":-50
 //             }
 //            ]
-function REloadMainSce_projs(projInfo){
-  var _defMainProjResRoot = ""; var _defMainProjCamFile = ""; 
-  var _deftransinfo = [[1,1,1],[0,0,0,1],[0,0,0]];
+function REloadMainSce_projs(projInfo,preclear){
   var _l = projInfo.length; 
-  var _isMainProj = false;
-  var _useCamPost = false;
-  var _loadDist = 1e30;
-  var _unLoadDist = 1e30;
   for(var i=0; i<_l; ++i){
+    var _defMainProjResRoot = ((i==0) ? projInfo[i].urlRes : ""); var _defMainProjCamFile = ""; 
+    var _deftransinfo = [[1,1,1],[0,0,0,1],[0,0,0]];
+    var _isMainProj = false;
+    var _projCRS ="";
+    var _projNorth =0.0;
+    var _useCamPost = false;
+    var _minLoadDist = 1e30;
+    var _maxLoadDist = 1e30;
     var intprojid = Module.RealBIMWeb.ConvGolStrID2IntID(projInfo[i].projName);
     var _ver = {m_sVer0:0x7fffffff, m_sVer1:-1, m_uVer0GolIDBias_L32:0, m_uVer0GolIDBias_H32:intprojid, m_uVer1GolIDBias_L32:0, m_uVer1GolIDBias_H32:0};
-    _isMainProj = ((i==0)? true : false); //如果是从单项目变成多项目，需注释掉此行代码，结合加载单项目的接口一起使用即可
+    _isMainProj = (((((typeof preclear == 'undefined') || preclear) && (i==0))) ? true : false);
+    if(typeof projInfo[i].projCRS != 'undefined'){_projCRS =projInfo[i].projCRS;}
+    if(typeof projInfo[i].projNorth != 'undefined'){_projNorth =projInfo[i].projNorth;}
     if(!projInfo[i].useNewVer){
       _verInfo = projInfo[i].verInfo;
       _ver = {m_sVer0:_verInfo, m_sVer1:-1, m_uVer0GolIDBias_L32:0, m_uVer0GolIDBias_H32:intprojid, m_uVer1GolIDBias_L32:0, m_uVer1GolIDBias_H32:0};
     }
-    if(projInfo[i].useTransInfo){
-      _deftransinfo = projInfo[i].transInfo;
-    }
-    if((typeof projInfo[i].loadDist != 'undefined')&&(projInfo[i].loadDist!=0)){
-      _loadDist = projInfo[i].loadDist;
-    }
-    if((typeof projInfo[i].unLoadDist != 'undefined')&&(projInfo[i].unLoadDist!=0)){
-      _unLoadDist = projInfo[i].unLoadDist;
-    }
-    Module.RealBIMWeb.LoadMainSceExt(projInfo[i].projName, _isMainProj, projInfo[i].urlRes+projInfo[i].projResName+"/total.xml",
-                                     _deftransinfo[0], _deftransinfo[1], _deftransinfo[2], _loadDist, _unLoadDist,
+    if(projInfo[i].useTransInfo){_deftransinfo = projInfo[i].transInfo;}
+    if((typeof projInfo[i].minLoadDist != 'undefined')&&(projInfo[i].minLoadDist!=0)){_minLoadDist = projInfo[i].minLoadDist;}
+    if((typeof projInfo[i].maxLoadDist != 'undefined')&&(projInfo[i].maxLoadDist!=0)){_maxLoadDist = projInfo[i].maxLoadDist;}
+    Module.RealBIMWeb.LoadMainSceExt(projInfo[i].projName, _isMainProj, _projCRS, _projNorth, projInfo[i].urlRes+projInfo[i].projResName+"/total.xml",
+                                     _deftransinfo[0], _deftransinfo[1], _deftransinfo[2], _minLoadDist, _maxLoadDist,
                                      _defMainProjResRoot, _defMainProjCamFile, _useCamPost);
     var verbool =Module.RealBIMWeb.SetSceVersionInfoExt(projInfo[i].projName,_ver);
   }
 }
 
 // 项目集设置单项目的位置偏移
+// 表示要处理的项目名称，为空串则表示处理所有项目
+// 表示偏移信息（缩放旋转平移）[[1,1,1],[0,0,0,1],[0,0,0]]
 function REsetMainSceTransform(projName,transInfo){
-  return Module.RealBIMWeb.SetMainSceTransform(projName,transInfo);
+  var _transinfo={
+    m_vScale:transInfo[0], m_qRotate:transInfo[1], m_vOffset:transInfo[2]
+  }
+  return Module.RealBIMWeb.SetMainSceTransform(projName,_transinfo);
 }
 // 项目集获取设置的单项目的位置偏移信息
 function REgetMainSceTransform(projName){
-  return Module.RealBIMWeb.GetMainSceTransform(projName);
+  var _transinfo =Module.RealBIMWeb.GetMainSceTransform(projName);
+  return [_transinfo.m_vScale, _transinfo.m_qRotate, _transinfo.m_vOffset];
 }
 //设置项目的自动加载/卸载距离阈值
 //strProjName：表示要处理的项目名称，为空串则表示处理所有项目
-//vDist：<x,y>分别表示项目资源的自动加载/卸载距离阈值(>0表示绝对距离，<0表示距离阈值相对于项目包围盒尺寸的倍数，=0表示默认加载方式)
-function REsetMainSceAutoLoadDist(projName,loadDist,unLoadDist){
-  var _loaddist = (loadDist==0)?1e30:loadDist;
-  var _unloaddist = (unLoadDist==0)?1e30:unLoadDist;
-  var distinfo=[_loaddist,_unloaddist];
+//vDist：<x,y>分别表示项目资源的最大/最小加载距离阈值(>0表示绝对距离，<0表示距离阈值相对于项目包围盒尺寸的倍数，=0表示不卸载)
+function REsetMainSceAutoLoadDist(projName,minLoadDist,maxLoadDist){
+  var _minLoadDist = (minLoadDist==0)?1e30:minLoadDist;
+  var _maxLoadDist = (maxLoadDist==0)?1e30:maxLoadDist;
+  var distinfo=[_minLoadDist,_maxLoadDist];
   Module.RealBIMWeb.SetMainSceAutoLoadDist(projName,distinfo);
 }
-// 获取单项目的自动加载/卸载距离阈值
+// 获取单项目的最大/最小加载距离阈值
 function REgetMainSceAutoLoadDist(projName){
   return Module.RealBIMWeb.GetMainSceAutoLoadDist(projName);
 }
@@ -226,8 +231,10 @@ function REfocusCamTo_projs(projIdInfo,backDepth){
   Module.RealBIMWeb.FocusCamToSubElems("","",elemIds.byteLength,elemIds.byteOffset,backDepth); //backdepth表示相机后退的强度，可设置
 }
 //相机定位到场景节点
-function REfocusCamToSce(sceName,backDepth){
-  Module.RealBIMWeb.FocusCamToSubElems("",sceName,0,0,backDepth); //backdepth表示相机后退的强度，可设置
+function REfocusCamToSce(projName,sceName,backDepth){
+  var _projname = "";
+  if(typeof projName != 'undefined'){_projname = projName;}
+  Module.RealBIMWeb.FocusCamToSubElems(_projname,sceName,0,0,backDepth); //backdepth表示相机后退的强度，可设置
 }
 
 //相机方位相关
@@ -524,6 +531,50 @@ function REresetElemClrExt_projs(projname,objarr){
   }
 }
 
+
+//表示多边形区域场景裁剪的内部消息响应函数
+REpolyclipHugeObjSubElems_innerlistener_inited =false;
+function REpolyclipHugeObjSubElems_innerlistener(e){
+  var finalprojs =[]; var curprojname =""; var curprojelemids =[]; var curprojid =0xffffffff; var id1, id2;
+  for(i =0; i<e.detail.elemids.length/2; ++i){
+    id1 =e.detail.elemids[i*2+0]; id2 =e.detail.elemids[i*2+1];
+    if(id2 != curprojid){
+      if(curprojid != 0xffffffff){finalprojs.push({name: curprojname, ids: curprojelemids});}
+      curprojname =Module.RealBIMWeb.ConvGolIntID2StrID(id2); curprojelemids =[id1]; curprojid =id2;
+    }else{
+      curprojelemids.push(id1);
+    }
+  }
+  if(curprojelemids.length > 0){
+    finalprojs.push({name: curprojname, ids: curprojelemids}); 
+  }
+	var event = new CustomEvent("RealBIMPolyClipRet", {detail:{progress: e.detail.progress, projs: finalprojs, aabb: e.detail.aabb, userbatch: e.detail.userbatch}});
+	document.dispatchEvent(event);
+}
+
+//进行多边形区域场景裁剪
+//strProjName：表示要处理的项目名称，为空串则表示处理所有项目
+//strHugeObjName：表示要处理的复杂模型的名称标识，若为空串则表示处理所有的复杂模型
+//PolyPotsArray：表示XY平面的多边形裁剪区域(多边形首端点与末端点相连可构成一个封闭区域)
+//dMinHeight,dMaxHeight：表示Z轴上多边形裁剪区域的最小/最大高度
+//bOnlyVisible：表示是否仅包含可见元素
+//bIncludeInter：表示是否包含与多边形区域边界相交的元素
+//uUserBatch：表示用户自定义批次编号
+function REpolyclipHugeObjSubElems(strProjName, strHugeObjName, PolyPotsArray, dMinHeight, dMaxHeight, bOnlyVisible, bIncludeInter, uUserBatch){
+  if(REpolyclipHugeObjSubElems_innerlistener_inited == false){
+    REpolyclipHugeObjSubElems_innerlistener_inited =true;
+    document.addEventListener("RealBIMPolyClipping", REpolyclipHugeObjSubElems_innerlistener);
+  }
+  var innerstr = (PolyPotsArray.length*16).toString();
+  Module.RealBIMWeb.ReAllocHeapViews(innerstr); var polypots =Module.RealBIMWeb.GetHeapView_Double(0);
+  for(var j =0; j<PolyPotsArray.length; ++j)
+  {
+    polypots[2*j+0] =PolyPotsArray[j][0]; polypots[2*j+1] =PolyPotsArray[j][1];
+  }
+  Module.RealBIMWeb.PolyClipHugeObjSubElems(strProjName, strHugeObjName, polypots.byteLength, polypots.byteOffset, dMinHeight, dMaxHeight, bOnlyVisible, bIncludeInter, uUserBatch);  
+}
+
+
 //根据id判断一个构件是否被设为透明
 function REisElemHide(elemid){
   Module.RealBIMWeb.ReAllocHeapViews("16"); clrs =Module.RealBIMWeb.GetHeapView_U32(0);
@@ -617,26 +668,40 @@ function REsetElemsProbeMask(objarr,bool){
 function REaddAnchors(ancinfo){
   var tempanchors =new Module.RE_Vector_ANCHOR();
   for(i=0;i<ancinfo.length;++i){
-    var _uselod = false; var _linepos = [0,0]; var _lineclr = 0x00000000; var _size = 0; var _selfASDist = -1; var _selfVisDist = -1; 
-    if(typeof ancinfo[i].useLod != 'undefined'){
-      _uselod = ancinfo[i].useLod;
+    var _uselod = false; var _linepos = [0,0]; var _lineclr = 0x00000000; var _size = 0; var _selfASDist = -1; var _selfVisDist = -1;
+    var _texfocus =[0,0]; var _textbias =[1,0]; var _GolFontID ="RealBIMFont001"; var _textcolor =0xffffffff; var _textbordercolor =0xffffffff;
+    var _groupname = "DefaultGroup";
+    if(typeof ancinfo[i].groupname != 'undefined'){_groupname = ancinfo[i].groupname;}
+    if(typeof ancinfo[i].uselod != 'undefined'){_uselod = ancinfo[i].uselod;}
+    if(typeof ancinfo[i].linepos != 'undefined'){_linepos = ancinfo[i].linepos;}
+    if(typeof ancinfo[i].lineclr != 'undefined'){_lineclr = ancinfo[i].lineclr;}
+    if(typeof ancinfo[i].ancsize != 'undefined'){_size = ancinfo[i].ancsize;}
+    if(typeof ancinfo[i].selfautoscaledist != 'undefined'){_selfASDist = ancinfo[i].selfautoscaledist;}
+    if(typeof ancinfo[i].selfvisdist != 'undefined'){_selfVisDist = ancinfo[i].selfvisdist;}
+    if(typeof ancinfo[i].textbias != 'undefined'){_textbias = ancinfo[i].textbias;}
+    if(typeof ancinfo[i].texfocus != 'undefined'){_texfocus = ancinfo[i].texfocus;}
+    if(typeof ancinfo[i].fontname != 'undefined'){_GolFontID = ancinfo[i].fontname;}
+    if(typeof ancinfo[i].textcolor != 'undefined'){_textcolor = ancinfo[i].textcolor;}
+    if(typeof ancinfo[i].textbordercolor != 'undefined'){_textbordercolor = ancinfo[i].textbordercolor;}
+
+    var TempTextRect =[0, 0, 1, 1]; var TempTextFmtFlag =0x40/*TEXT_FMT_NOCLIP*/;
+    if(_textbias[0] < 0){
+        TempTextRect[0] =_linepos[0]-1-_texfocus[0]; TempTextRect[2] =_linepos[0]-_texfocus[0]; TempTextFmtFlag |=0x20/*TEXT_FMT_RIGHT*/;
+    }else if(_textbias[0] == 0){
+        TempTextRect[0] =_linepos[0]-_texfocus[0]; TempTextRect[2] =_linepos[0]+1-_texfocus[0]; TempTextFmtFlag |=0x8/*TEXT_FMT_LEFT*/;
+    }else{
+        TempTextRect[0] =ancinfo[i].picwidth+_linepos[0]-_texfocus[0]; TempTextRect[2] =ancinfo[i].picwidth+_linepos[0]+1-_texfocus[0]; TempTextFmtFlag |=0x8/*TEXT_FMT_LEFT*/;
     }
-    if(typeof ancinfo[i].linepos != 'undefined'){
-      _linepos = ancinfo[i].linepos;
+    if(_textbias[1] < 0){
+        TempTextRect[1] =_linepos[1]-1-_texfocus[1]; TempTextRect[3] =_linepos[1]-_texfocus[1]; TempTextFmtFlag |=0x4/*TEXT_FMT_TOP*/;
+    }else if(_textbias[1] == 0){
+        TempTextRect[1] =_linepos[1]-_texfocus[1]; TempTextRect[3] =_linepos[1]+1-_texfocus[1]; TempTextFmtFlag |=0x1/*TEXT_FMT_BOTTOM*/;
+    }else{
+        TempTextRect[1] =ancinfo[i].picheight+_linepos[1]-_texfocus[1]; TempTextRect[3] =ancinfo[i].picheight+_linepos[1]+1-_texfocus[1]; TempTextFmtFlag |=0x1/*TEXT_FMT_BOTTOM*/;
     }
-    if(typeof ancinfo[i].lineclr != 'undefined'){
-      _lineclr = ancinfo[i].lineclr;
-    }
-    if(typeof ancinfo[i].ancsize != 'undefined'){
-      _size = ancinfo[i].ancsize;
-    }
-    if(typeof ancinfo[i].selfautoscaledist != 'undefined'){
-      _selfASDist = ancinfo[i].selfautoscaledist;
-    }
-    if(typeof ancinfo[i].selfvisdist != 'undefined'){
-      _selfVisDist = ancinfo[i].selfvisdist;
-    }
+
     var tempobj ={
+     m_strGroupName:_groupname, 
      m_strName: ancinfo[i].ancname, 
      m_vPos: ancinfo[i].pos, 
      m_bUseLOD: _uselod,
@@ -647,7 +712,7 @@ function REaddAnchors(ancinfo){
      m_fSelfVisDist: _selfVisDist,
      m_cTexRegion: {
        m_strTexPath: ancinfo[i].picpath,
-       m_qTexRect: [-ancinfo[i].picwidth/2+_linepos[0], 0+_linepos[1], ancinfo[i].picwidth/2+_linepos[0], ancinfo[i].picheight+_linepos[1]],
+       m_qTexRect: [_linepos[0]-_texfocus[0], _linepos[1]-_texfocus[1], ancinfo[i].picwidth+_linepos[0]-_texfocus[0], ancinfo[i].picheight+_linepos[1]-_texfocus[1]],
        m_uTexClrMult: 0xffffffff,
        m_vMinTexUV: [0.0, 0.0],
        m_vMaxTexUV: [1.0, 1.0],
@@ -658,19 +723,28 @@ function REaddAnchors(ancinfo){
        m_fFrameFreq: 0.0,
      },
      m_cTextRegion: {
-       m_strGolFontID: "RealBIMFont001",
+       m_strGolFontID: _GolFontID,
        m_bTextWeight: false,
        m_strText: ancinfo[i].textinfo,
-       m_uTextClr: 0xffffffff,
-       m_uTextBorderClr: 0x80000000,
-       m_qTextRect: [ancinfo[i].picwidth/2+_linepos[0], _linepos[1], ancinfo[i].picwidth/2+1+_linepos[0], 1+_linepos[1]],
-       m_uTextFmtFlag: (0x1/*TEXT_FMT_BOTTOM*/ | 0x8/*TEXT_FMT_LEFT*/ | 0x40/*TEXT_FMT_NOCLIP*/),
+       m_uTextClr: _textcolor,
+       m_uTextBorderClr: _textbordercolor,
+       m_qTextRect: TempTextRect,
+       m_uTextFmtFlag: TempTextFmtFlag,
      }
     };
     tempanchors.push_back(tempobj);
   }
   var bool =Module.RealBIMWeb.AddAnchors(tempanchors);
   return bool;
+}
+//获取所有的锚点分组名称
+function REgetAllAnchorGroupNames(){
+  var ancgroupname = Module.RealBIMWeb.GetAllAnchorGroupNames();
+  var namearr = [];
+  for(i =0; i<ancgroupname.size(); ++i){
+    namearr.push(ancgroupname.get(i));
+  }
+  return namearr;
 }
 //批量删除锚点
 function REdelAnchors(arrancname){
@@ -739,47 +813,141 @@ function REstopAncAnim(ancname){
   var bool =Module.RealBIMWeb.SetShpObjInfo(ancname, {m_uRGBBlendInfo:0x00ffffff, m_uAlpha:0, m_uAlphaAmp:0, m_uForceAnimFrame:0, m_uProbeMask:1});
   return bool;
 }
-//设置系统中锚点是否允许被场景遮挡
-function REsetAnchorContactSce(bool){
-  Module.RealBIMWeb.SetAnchorContactSce(bool);
-}
-//获取系统中锚点是否允许被场景遮挡
-function REgetAnchorContactSce(){
-  return Module.RealBIMWeb.GetAnchorContactSce();
-}
+
 //设置聚合锚点
-//lodlevel:表示聚合层级，范围1~10,默认为1，表示不聚合
+//groupName:表示要聚合的锚点组的标识名，为空则表示所有的锚点对象
+//lodLevel:表示聚合层级，范围1~10,默认为1，表示不聚合
 //useCustomBV:是否用锚点的预估总包围盒，默认为false
 //customBV:锚点的预估总包围盒，当useCustomBV为false时，此参数无效，填空数组即可，默认为场景的总包围盒
-//mergedist:聚合的半径，单位为像素，例如为300px，则表示当局部范围内锚点数量大于最小聚合个数minMergeNum，
-//          并且全部锚点投影到屏幕空间距离小于聚合的半径mergedist时，才发生聚合
-//minMergeNum:最小的聚合个数，取值为正整数，例如为10，即10个或以上的标签会发生聚合
-//strMergeTexPath:聚合锚点使用的图片路径
-//texWidth:聚合锚点使用的图片宽度
-//texHeight:聚合锚点使用的图片高度
-function REsetAnchorLODInfo(lodLevel,useCustomBV,customBV,mergedist,minMergeNum,strMergeTexPath,texWidth,texHeight){
+//lodMergePxl:表示锚点所在单元格进行LOD合并时的投影到屏幕的像素尺寸阈值
+//lodMergeCap:表示锚点所在单元格进行LOD合并时的单元格容积阈值
+//mergeStyle:表示锚点聚合后的样式，json对象
+// {
+//   "picPath":"http://bingjiang.f3322.net:8008/test/css/img/tag.png", //聚合锚点的图片路径
+//   "picWith":32, //聚合锚点的图片宽度
+//   "picHeight":32, //聚合锚点的图片高度
+//   "textBias":[1,0], //聚合锚点文字和图片的对齐方式
+//   "fontName":"RealBIMFont001", //聚合锚点文字样式
+//   "textColor":0xffffffff, //聚合锚点文字颜色
+//   "textBorderColor":0x80000000 //聚合锚点文字边框颜色
+// }
+function REsetAnchorLODInfo(groupName,lodLevel,useCustomBV,customBV,lodMergePxl,lodMergeCap,mergeStyle){
   var _customBV = [[0,0,0],[0,0,0]];
-  var _texrect = [-texWidth/2,0,texWidth/2,texHeight];
-  if(useCustomBV){
-    _customBV=customBV;
+  if(useCustomBV){_customBV=customBV;}
+  var _linepos = [0,0];  var _texfocus =[0,0]; 
+  var _textbias =mergeStyle.textBias; 
+  var _GolFontID ="RealBIMFont001";
+  if(mergeStyle.fontName != "") {_GolFontID=mergeStyle.fontName};
+  //设置文字和图片的对齐方式
+  var TempTextRect =[0, 0, 1, 1]; var TempTextFmtFlag =0x40/*TEXT_FMT_NOCLIP*/;
+  if(_textbias[0] < 0){
+      TempTextRect[0] =_linepos[0]-1-_texfocus[0]; TempTextRect[2] =_linepos[0]-_texfocus[0]; TempTextFmtFlag |=0x20/*TEXT_FMT_RIGHT*/;
+  }else if(_textbias[0] == 0){
+      TempTextRect[0] =_linepos[0]-_texfocus[0]; TempTextRect[2] =_linepos[0]+1-_texfocus[0]; TempTextFmtFlag |=0x8/*TEXT_FMT_LEFT*/;
+  }else{
+      TempTextRect[0] =mergeStyle.picWith+_linepos[0]-_texfocus[0]; TempTextRect[2] =mergeStyle.picWith+_linepos[0]+1-_texfocus[0]; TempTextFmtFlag |=0x8/*TEXT_FMT_LEFT*/;
   }
-  Module.RealBIMWeb.SetAnchorLODInfo(lodLevel,useCustomBV,_customBV,mergedist,minMergeNum,strMergeTexPath,_texrect);
+  if(_textbias[1] < 0){
+      TempTextRect[1] =_linepos[1]-1-_texfocus[1]; TempTextRect[3] =_linepos[1]-_texfocus[1]; TempTextFmtFlag |=0x4/*TEXT_FMT_TOP*/;
+  }else if(_textbias[1] == 0){
+      TempTextRect[1] =_linepos[1]-_texfocus[1]; TempTextRect[3] =_linepos[1]+1-_texfocus[1]; TempTextFmtFlag |=0x1/*TEXT_FMT_BOTTOM*/;
+  }else{
+      TempTextRect[1] =mergeStyle.picHeight+_linepos[1]-_texfocus[1]; TempTextRect[3] =mergeStyle.picHeight+_linepos[1]+1-_texfocus[1]; TempTextFmtFlag |=0x1/*TEXT_FMT_BOTTOM*/;
+  }
+  //创建一个锚点对象样式
+  var tempobj ={
+        m_strGroupName:groupName, 
+        m_strName: "", 
+        m_vPos: [0,0,0], 
+        m_bUseLOD: false,
+        m_vLineEnd: _linepos,
+        m_uLineClr: 0x00000000,
+        m_fSize: 0,
+        m_fSelfASDist: -1,
+        m_fSelfVisDist: -1,
+        m_cTexRegion: {
+                       m_strTexPath: mergeStyle.picPath,
+                       m_qTexRect: [_linepos[0]-_texfocus[0], _linepos[1]-_texfocus[1], mergeStyle.picWith+_linepos[0]-_texfocus[0], mergeStyle.picHeight+_linepos[1]-_texfocus[1]],
+                       m_uTexClrMult: 0xffffffff,
+                       m_vMinTexUV: [0.0, 0.0],
+                       m_vMaxTexUV: [1.0, 1.0],
+                       m_uFrameNumU: 1,
+                       m_uFrameNumV: 1,
+                       m_uFrameStrideU: 30,
+                       m_uFrameStrideV: 30,
+                       m_fFrameFreq: 0.0,
+                      },
+        m_cTextRegion: {
+                       m_strGolFontID: _GolFontID,
+                       m_bTextWeight: false,
+                       m_strText: "",
+                       m_uTextClr: mergeStyle.textColor,
+                       m_uTextBorderClr: mergeStyle.textBorderColor,
+                       m_qTextRect: TempTextRect,
+                       m_uTextFmtFlag: TempTextFmtFlag,
+                      }
+  };
+  Module.RealBIMWeb.SetAnchorLODInfo(groupName,lodLevel,useCustomBV,_customBV,lodMergePxl,lodMergeCap,tempobj);
+}
+//取消锚点聚合
+function REresetAnchorLODInfo(groupName){
+    var mergestyle ={
+        m_strGroupName:"", 
+        m_strName: "", 
+        m_vPos: [0,0,0], 
+        m_bUseLOD: false,
+        m_vLineEnd: [0,0],
+        m_uLineClr: 0x00000000,
+        m_fSize: 0,
+        m_fSelfASDist: -1,
+        m_fSelfVisDist: -1,
+        m_cTexRegion: {
+                       m_strTexPath: "",
+                       m_qTexRect: [0,0,0,0],
+                       m_uTexClrMult: 0xffffffff,
+                       m_vMinTexUV: [0.0, 0.0],
+                       m_vMaxTexUV: [1.0, 1.0],
+                       m_uFrameNumU: 1,
+                       m_uFrameNumV: 1,
+                       m_uFrameStrideU: 30,
+                       m_uFrameStrideV: 30,
+                       m_fFrameFreq: 0.0,
+                      },
+        m_cTextRegion: {
+                       m_strGolFontID: "RealBIMFont001",
+                       m_bTextWeight: false,
+                       m_strText: "",
+                       m_uTextClr: 0x00000000,
+                       m_uTextBorderClr: 0x00000000,
+                       m_qTextRect: [0,0,0,0],
+                       m_uTextFmtFlag: 0,
+                      }
+  };
+  Module.RealBIMWeb.SetAnchorLODInfo(groupName,1,false,[[0,0,0],[0,0,0]],100,1,mergestyle);
+}
+//设置系统中锚点是否允许被场景遮挡
+function REsetAnchorContactSce(groupName,bool){
+  Module.RealBIMWeb.SetAnchorContactSce(groupName,bool);
+}
+//获取系统中锚点是否允许被场景遮挡
+function REgetAnchorContactSce(groupName){
+  return Module.RealBIMWeb.GetAnchorContactSce(groupName);
 }
 //设置系统中锚点的自动缩放距离
-function REsetAnchorAutoScaleDist(dDist){
-  Module.RealBIMWeb.SetAnchorAutoScaleDist(dDist);
+function REsetAnchorAutoScaleDist(groupName,dDist){
+  Module.RealBIMWeb.SetAnchorAutoScaleDist(groupName,dDist);
 }
 //获取系统中锚点的自动缩放距离
-function REgetAnchorAutoScaleDist(){
-  return Module.RealBIMWeb.GetAnchorAutoScaleDist();
+function REgetAnchorAutoScaleDist(groupName){
+  return Module.RealBIMWeb.GetAnchorAutoScaleDist(groupName);
 }
 //设置系统中锚点的最远可视距离
-function REsetAnchorVisDist(dDist){
-  Module.RealBIMWeb.SetAnchorVisDist(dDist);
+function REsetAnchorVisDist(groupName,dDist){
+  Module.RealBIMWeb.SetAnchorVisDist(groupName,dDist);
 }
 //获取系统中锚点的最远可视距离
-function REgetAnchorVisDist(){
-  return Module.RealBIMWeb.GetAnchorVisDist();
+function REgetAnchorVisDist(groupName){
+  return Module.RealBIMWeb.GetAnchorVisDist(groupName);
 }
 //聚焦相机到指定的锚点
 //strName：表示锚点的标识名
@@ -1045,7 +1213,7 @@ function REgetSelElemIDs(){
   var projidarr =[];
   if(tempselids.length<2){
     // alert("当前选择集为空");
-    return;
+    return[];
   }
   var curprojid = tempselids[1];
   var curprojelemarr = [];
@@ -1223,9 +1391,9 @@ function REgetTotalBoxByElemIDs_projs(projname,objarr){
 //获取当前选中点相关参数
 function REgetCurProbeRet(){
   var proberet = Module.RealBIMWeb.GetCurProbeRet(Module.RE_PROBE_TYPE.POT);
-  var projid = proberet.m_uSelActorSubID_H32;
-  var projname = Module.RealBIMWeb.ConvGolIntID2StrID(projid);
-  proberet["m_strProjName"] = projname;
+  //var projid = proberet.m_uSelActorSubID_H32;
+  //var projname = Module.RealBIMWeb.ConvGolIntID2StrID(projid);
+  //proberet["m_strProjName"] = projname;
   delete proberet.m_uSelActorSubID_H32;
   return proberet;
 }
@@ -1238,6 +1406,50 @@ function REgetCurShpProbeRet(){
 function REgetCurUIShpProbeRet(){
   var shpproberet_ortho =Module.RealBIMWeb.GetCurShpProbeRet(Module.RE_SHP_PROBE_TYPE.ORTHO);
   return shpproberet_ortho;
+}
+//获取当前拾取到的复合场景信息
+function REgetCurCombProbeRet(){
+  var combret;
+  var proberet1 =REgetCurShpProbeRet();
+  var proberet2 =REgetCurProbeRet();
+  if(proberet1.m_strSelShpObjName != ""){
+    combret ={
+      m_strType : "Shape",
+      m_strSelObjName : proberet1.m_strSelShpObjName,
+      m_bbSelBV : [[0,0,0],[0,0,0]],
+      m_strProjName : "",
+      m_uElemID : 0xffffffff,
+      m_vSelCenter : proberet1.m_vSelPos,
+      m_vSelPos : proberet1.m_vSelPos,
+      m_vSelMoveDelta : proberet1.m_vSelMoveDelta,
+      m_vSelScrPos : proberet1.m_vSelScrPos
+    };
+  }else if(proberet2.m_strSelActorName != ""){
+    combret ={
+      m_strType : (proberet2.m_uSelActorSubID_L32 >= 0xfffffffe) ? "UnverModel" : "Model",
+      m_strSelObjName : proberet2.m_strSelActorName,
+      m_bbSelBV : proberet2.m_bbSelBV,
+      m_strProjName : proberet2.m_strProjName,
+      m_uElemID : proberet2.m_uSelActorSubID_L32,
+      m_vSelCenter : proberet2.m_vSelCenter,
+      m_vSelPos : proberet2.m_vSelPos,
+      m_vSelMoveDelta : proberet2.m_vSelMoveDelta,
+      m_vSelScrPos : proberet2.m_vSelScrPos
+    };
+  }else{
+    combret ={
+      m_strType : "",
+      m_strSelObjName : "",
+      m_bbSelBV : [[0,0,0],[0,0,0]],
+      m_strProjName : "",
+      m_uElemID : 0xffffffff,
+      m_vSelCenter : [0,0,0],
+      m_vSelPos : [0,0,0],
+      m_vSelMoveDelta : [0,0],
+      m_vSelScrPos : [0,0]
+    };
+  }
+  return combret;
 }
 
 //获取剖切后的构件ID
@@ -1283,7 +1495,7 @@ function REremoveUnverProjectData(elemarr){
   }
   Module.RealBIMWeb.RemoveUnverprojectToSelection(elemIds.byteLength,elemIds.byteOffset);
 }
-//设置拍平区域，参数为要取消的拍平区域id集合
+//重新拍平部分区域
 function REresetUnverProjectData(elemarr){
   var _s = elemarr.length;
   var _s01 = (_s*8).toString();
@@ -1295,12 +1507,13 @@ function REresetUnverProjectData(elemarr){
   }
   Module.RealBIMWeb.AddUnverprojectToSelection(elemIds.byteLength,elemIds.byteOffset);
 }
+
 //设置倾斜摄影单体化数据，参数为固定格式json字符串
 function REsetUnverElemData(unverelemdata){
   var jsonStr = JSON.stringify(unverelemdata);
   Module.RealBIMWeb.ParseUnverelemInfo(jsonStr);
 }
-//高亮倾斜摄影单体化区域，参数为要查看的单体化id集合
+//高亮显示倾斜摄影单体化区域，参数为要查看的单体化id集合
 function REshowUnverElemData(elemarr){
   var _s = elemarr.length;
   var _s01 = (_s*8).toString();
@@ -1312,7 +1525,7 @@ function REshowUnverElemData(elemarr){
   }
   Module.RealBIMWeb.HighlightUnverelem(elemIds.byteLength,elemIds.byteOffset);
 }
-//取消高亮倾斜摄影单体化区域，参数为要隐藏的单体化id集合
+//隐藏倾斜摄影单体化区域，参数为要隐藏的单体化id集合
 function REhideUnverElemData(elemarr){
   var _s = elemarr.length;
   var _s01 = (_s*8).toString();
@@ -1357,17 +1570,52 @@ function REgetUnverElemIDs(){
 //cn::u32 m_UnverelmSelectionColor = 0xff00ffff;
 // clr ="FF0000"; //颜色
 // alpha =25;  //透明度，255表示不透明，80表示半透明，0表示全透明
-function REsetUnverElemClr(clr,alpha){
+function REsetSelUnverElemClr(clr,alpha){
   var newclr01 = clr.substring(0,2); 
   var newclr02 = clr.substring(2,4); 
   var newclr03 = clr.substring(4,6); 
   var newclr = newclr03+newclr02+newclr01; 
+  var clrinfo ="0xff"+newclr; 
+  var clr = parseInt(clrinfo);
+  Module.RealBIMWeb.SetUnverelemSelectionColor(clr, alpha, 0xff);
+}
+//设置单体化区域隐藏状态下的颜色
+//cn::u32 m_UnverelmSelectionColor = 0xff00ffff;
+// clr ="FF0000"; //颜色
+// alpha =25;  //透明度，255表示不透明，80表示半透明，0表示全透明
+function REsetUnverElemHideClr(clr,alpha){
+  var newclr01 = clr.substring(0,2); 
+  var newclr02 = clr.substring(2,4); 
+  var newclr03 = clr.substring(4,6); 
+  var newclr = newclr03+newclr02+newclr01; 
+  if(alpha<2){alpha =2;}
   var intalphainfo =Math.round(alpha);
   var newalphainfo =(intalphainfo>15 ? (intalphainfo.toString(16)) : ("0"+intalphainfo.toString(16)));
   var clrinfo ="0x"+newalphainfo+newclr; 
   var clr = parseInt(clrinfo);
-  Module.RealBIMWeb.SetUnverelemSelectionColor(clr);
+  Module.RealBIMWeb.SetUnverelemHideColor(clr);
 }
+
+
+//设置鼠标悬停事件的参数
+//dWaitTime：表示鼠标静止后等待多长时间才发送悬停事件
+function REsetMouseHoverEventParam(dWaitTime){
+  Module.RealBIMWeb.SetMouseHoverEventParam(dWaitTime);
+}
+//获取鼠标悬停事件的参数
+function REgetMouseHoverEventParam(){
+  return Module.RealBIMWeb.GetMouseHoverEventParam();
+}
+//设置鼠标移动事件的参数
+//bEnable：表示是否向外界发送鼠标移动事件
+function REsetMouseMoveEventParam(bEnable){
+  Module.RealBIMWeb.SetMouseMoveEventParam(bEnable);
+}
+//获取鼠标悬停事件的参数
+function REgetMouseMoveEventParam(){
+  return Module.RealBIMWeb.GetMouseMoveEventParam();
+}
+
 
 //天空盒相关
 //设置天空盒的启用状态
@@ -1394,9 +1642,9 @@ function REgetBackColor(){
   return color;
 }
 
-//获取场景所有地形和倾斜摄影的节点id
-function REgetAllUnVerHugeGroupIDs(){
-  var arr1 =Module.RealBIMWeb.GetAllUnVerHugeGroupNames();
+//获取场景所有地形和倾斜摄影模型的节点
+function REgetAllUnVerHugeGroupIDs(projname) {
+  var arr1 = Module.RealBIMWeb.GetAllUnVerHugeGroupNames((typeof projname != 'undefined') ? projname : "");
   var namearr = [];
   for(i =0; i<arr1.size(); ++i){
     namearr.push(arr1.get(i));
@@ -1427,9 +1675,9 @@ function REresetUserOperation(){
   Module.RealBIMWeb.ResetUserOperation(0);
 }
 
-//获取场景所有地形和倾斜摄影的节点id
-function REgetAllHugeGroupIDs(){
-  arr1 =Module.RealBIMWeb.GetAllHugeObjNames();
+//获取场景所有BIM模型的节点名称
+function REgetAllHugeGroupIDs(projname){
+  var arr1 =Module.RealBIMWeb.GetAllHugeObjNames((typeof projname != 'undefined') ? projname : "");
   var namearr = [];
   for(i =0; i<arr1.size(); ++i){
     namearr.push(arr1.get(i));
@@ -1496,15 +1744,69 @@ function REsetAutoCamAnimParams(pot,speed,bool){
   Module.RealBIMWeb.SetAutoCamAnimEnable(bool);
 }
 
+
+//设置引擎世界空间对应的坐标参考系信息
+//strCRS：表示引擎世界空间对应的坐标参考系描述符(标准PROJ坐标系字符串)，为空串表示无特殊地理信息坐标系
+//返回值：返回是否设置成功
+function REsetEngineWorldCRS(strCRS){
+  return Module.RealBIMWeb.SetEngineWorldCRS(strCRS);
+}
+//获取引擎世界空间坐标系描述符
+function REgetEngineWorldCRS(){
+  return Module.RealBIMWeb.GetEngineWorldCRS();
+}
+
+//在引擎世界空间坐标与目标地理信息坐标间进行转换
+//bForward：true->由引擎世界空间坐标转换到目标地理信息坐标；false->由目标地理信息坐标转换到引擎世界空间坐标
+//strDestCRS：表示目标坐标系描述符，当引擎坐标系描述符和目标坐标系描述符均为空时则坐标无需转换成功返回，否则任一描述符为空将导致转换失败
+//src_coords：输入待转换的坐标数组
+function REtransEngineCoords(bForward, strDestCRS, src_coords){
+  var _s = src_coords.length;  var _s01 = (_s*24).toString();
+  Module.RealBIMWeb.ReAllocHeapViews(_s01); var temparr1 =Module.RealBIMWeb.GetHeapView_Double(0);
+  for(i =0; i<_s; ++i)
+  {
+    temparr1[i*3+0] =src_coords[i][0]; temparr1[i*3+1] =src_coords[i][1]; temparr1[i*3+2] =src_coords[i][2];
+  }
+  var temparr2 =[];
+  if(Module.RealBIMWeb.TransEngineCoords(bForward,strDestCRS,temparr1.byteLength,temparr1.byteOffset)){
+   for(i =0; i<_s; ++i)
+    {
+      temparr2.push([temparr1[i*3+0], temparr1[i*3+1], temparr1[i*3+2]]); 
+    }
+  }
+  return temparr2;
+}
+
+//进行地理信息坐标转换
+//strSrcCRS：表示源坐标系描述符
+//strDestCRS：表示目标坐标系描述符
+//src_coords：输入待转换的坐标数组，每个坐标是4个DOUBLE的数组[x,y,z,w]
+//					   坐标顺序定义为：
+//             1.经纬度坐标系：x:经度  y:纬度  z：高程  w:测绘时间
+//             2.投影坐标系：x:东西方向坐标  y:南北方向投影
+function REtransGeoCoords(strSrcCRS, strDestCRS, src_coords){
+  var _s = src_coords.length;  var _s01 = (_s*32).toString();
+  Module.RealBIMWeb.ReAllocHeapViews(_s01); var temparr1 =Module.RealBIMWeb.GetHeapView_Double(0);
+  for(i =0; i<_s; ++i)
+  {
+    temparr1[i*4+0] =src_coords[i][0]; temparr1[i*4+1] =src_coords[i][1]; temparr1[i*4+2] =src_coords[i][2]; temparr1[i*4+3] =src_coords[i][3]; 
+  }
+  var temparr2 =[];
+  if(Module.RealBIMWeb.TransGeoCoords(strSrcCRS,strDestCRS,temparr1.byteLength,temparr1.byteOffset)){
+   for(i =0; i<_s; ++i)
+    {
+      temparr2.push([temparr1[i*4+0], temparr1[i*4+1], temparr1[i*4+2], temparr1[i*4+3]]); 
+    }
+  }
+  return temparr2;
+}
+
 //地理坐标信息相关
 //增加一套地理信息坐标系
 //strName：表示地理坐标系的标识名
-//ProjType:'w'表示Web墨卡托投影，'c'表示经纬度投影
-//arrRgn:资源覆盖总范围    
-//arrTopTileInfo:加载的顶层块信息<x,y,z> x,y:lon,lat分块编号 ，z:Lod等级
-//uStartLOD:切片服务的起始层级
-function REaddGeoCoord(strName,strProjType,arrRgn,arrTopTileInfo,uStartLOD){
-  return Module.RealBIMWeb.AddGeoCoord(strName,strProjType,arrRgn,arrTopTileInfo,uStartLOD);
+//strCRS:表示坐标系描述符
+function REaddGeoCoord(strName,strCRS){
+  return Module.RealBIMWeb.AddGeoCoord(strName,strCRS);
 }
 //地理坐标信息相关
 //增加一套自定义坐标系
@@ -1596,6 +1898,21 @@ function REsetLevelProbeEnable(bool){
 function REsetMiscDataDepthTest(bool){
   Module.RealBIMWeb.SetMiscDataDepthTest(bool);
 }
+
+
+//设置项目局部可投射矢量区域信息
+//strProjName：表示要处理的项目名称，不能为空串
+//strJson：表示区域JSON数据
+function REsetLocalProjRgnsInfo(strProjName, cRgnData){
+  var jsonStr =JSON.stringify(cRgnData);
+  return Module.RealBIMWeb.SetLocalProjRgnsInfo(strProjName, jsonStr);
+}
+//清空项目局部可投射矢量区域信息
+//strProjName：表示要处理的项目名称，为空串表示清空所有项目的矢量区域信息
+function REclearLocalProjRgnsInfo(strProjName){
+  return Module.RealBIMWeb.SetLocalProjRgnsInfo(strProjName, "");
+}
+
 
 //获取系统中的全局元素骨骼总数
 function REgetGolElemBoneNum(){
@@ -1914,53 +2231,162 @@ function RErefreshHugeObjMainData(strProjName,strSceName,bLoadNewData){
   Module.RealBIMWeb.RefreshHugeObjMainData(strProjName,strSceName,bLoadNewData);
 }
 
-//将地形场景节点投影到指定高度
+//将非版本管理复杂模型组投射到指定高度
 //strProjName：表示要处理的项目名称，为空串则表示处理所有项目
-//scename：表示要处理的复杂模型组的名称标识，若为空串则表示处理所有的复杂模型组
-//heightType,height：  heightType==0：表示复杂模型组禁止投射到固定高度
-//            heightType==1：height表示世界空间绝对高度
-//            heightType==2：height表示非版本管理复杂模型组自身包围盒的相对高度范围(0~1)
-//            heightType==3：height表示整个场景的非版本复杂模型总包围盒的相对高度范围(0~1)
-function REprojUnVerHugeGroupToHeight(strProjName,strSceName,uHeightType,fHeight){
-  Module.RealBIMWeb.ProjUnVerHugeGroupToHeight(strProjName,strSceName,uHeightType,fHeight);
+//strGroupName：表示要处理的复杂模型组的名称标识，若为空串则表示处理所有的复杂模型组
+//uHeightType,dHeight：	uHeightType==0：表示复杂模型组禁止投射到固定高度
+//						uHeightType==1：dHeight表示世界空间绝对高度
+//						uHeightType==2：dHeight表示非版本管理复杂模型组自身包围盒的相对高度范围(0~1)
+//						uHeightType==3：dHeight表示整个场景的非版本复杂模型总包围盒的相对高度范围(0~1)
+//dHeightAmp：表示复杂模型组投射到指定高度的投射强度(0~1)(uHeightType>0有效)
+function REprojUnVerHugeGroupToHeight(strProjName,strGroupName,uHeightType,dHeight,dHeightAmp){
+  Module.RealBIMWeb.ProjUnVerHugeGroupToHeight(strProjName,strGroupName,uHeightType,dHeight,dHeightAmp);
 }
 
-// 创建文字矢量
-//strTextName：表示添加的文字对象的id，字符串类型，全局唯一，如有重复则后添加的会替代先添加的文字对象
-//strText：文字内容
-//arrPos:文字对象的中心点坐标
-//strFontName:文字对象的字体样式
-//uFontClr:文字的颜色
-//uBorderClr:文字的边框颜色
-//fDist:文字的可视距离
-function REcreateCustomTextShp(strTextName,strText,arrPos,strFontName,uFontClr,uBorderClr,fDist){
-  var _fontName = (strFontName=="")?("RealBIMFont001"):(strFontName);
-  Module.RealBIMWeb.CreateCustomTextShp(strTextName,strText,arrPos,_fontName,uFontClr,uBorderClr,fDist);
+//设置非版本管理复杂模型组是否允许投射到项目局部可投射矢量
+//strProjName：表示要处理的项目名称，为空串则表示处理所有项目
+//strGroupName：表示要处理的复杂模型组的名称标识，若为空串则表示处理所有的复杂模型组
+function REsetUnVerHugeGroupProjToLocalShp(strProjName, strGroupName, bProjToLocalShp){
+  return Module.RealBIMWeb.SetUnVerHugeGroupProjToLocalShp(strProjName, strGroupName, bProjToLocalShp);
 }
-// 创建折线矢量
-//strLineName：表示添加的折线对象的id，字符串类型，全局唯一，如有重复则后添加的会替代先添加的折线对象
-//arrPos:折线对象的顶点坐标数组
-//uLineClr:折线对象的颜色
-//fDist:折线对象的可视距离
-function REcreateCustomPolyline(strLineName,arrPos,uLineClr,fDist){
-  var temparrpos =new Module.RE_Vector_vec3();
-  for(var i=0;i<arrPos.length;++i){
-    temparrpos.push_back(arrPos[i]);
+//获取非版本管理复杂模型组是否允许投射到项目局部可投射矢量
+//strProjName：表示要处理的项目名称，为空串则表示处理所有项目
+//strGroupName：表示要处理的复杂模型组的名称标识，若为空串则表示处理所有的复杂模型组
+function REgetUnVerHugeGroupProjToLocalShp(strProjName, strGroupName){
+  return Module.RealBIMWeb.GetUnVerHugeGroupProjToLocalShp(strProjName, strGroupName);
+}
+
+//设置非版本管理复杂模型组是否允许投射到全局可投射矢量
+//strProjName：表示要处理的项目名称，为空串则表示处理所有项目
+//strGroupName：表示要处理的复杂模型组的名称标识，若为空串则表示处理所有的复杂模型组
+function REsetUnVerHugeGroupProjToGolShp(strProjName, strGroupName, bProjToGolShp){
+  return Module.RealBIMWeb.SetUnVerHugeGroupProjToGolShp(strProjName, strGroupName, bProjToGolShp);
+}
+//获取非版本管理复杂模型组是否允许投射到全局可投射矢量
+//strProjName：表示要处理的项目名称，为空串则表示处理所有项目
+//strGroupName：表示要处理的复杂模型组的名称标识，若为空串则表示处理所有的复杂模型组
+function REgetUnVerHugeGroupProjToGolShp(strProjName, strGroupName){
+  return Module.RealBIMWeb.GetUnVerHugeGroupProjToGolShp(strProjName, strGroupName);
+}
+
+//设置非版本管理复杂模型组是否允许矢量数据投影到模型组自身
+//strProjName：表示要处理的项目名称，为空串则表示处理所有项目
+//strGroupName：表示要处理的复杂模型组的名称标识，若为空串则表示处理所有的复杂模型组
+function REsetUnVerHugeGroupProjToSelf(strProjName, strGroupName, bProjToSelf){
+  return Module.RealBIMWeb.SetUnVerHugeGroupProjToSelf(strProjName, strGroupName, bProjToSelf);
+}
+//获取非版本管理复杂模型组是否允许矢量数据投影到模型组自身
+//strProjName：表示要处理的项目名称，为空串则表示处理所有项目
+//strGroupName：表示要处理的复杂模型组的名称标识，若为空串则表示处理所有的复杂模型组
+function REgetUnVerHugeGroupProjToSelf(strProjName, strGroupName){
+  return Module.RealBIMWeb.GetUnVerHugeGroupProjToSelf(strProjName, strGroupName);
+}
+
+
+//创建自定义顶点矢量
+//strShpName：表示矢量标识名，若已有同名的矢量则覆盖之
+//vPos：表示顶点位置
+//uPotSize：表示顶点的像素大小
+//uClr：表示顶点的颜色
+//cTextInfo：表示顶点的文字标注信息
+//fASDist：表示屏幕空间矢量的自动缩放起始距离
+//fVisDist：表示屏幕空间矢量的可视距离
+//bContactSce：表示矢量是否与场景发生深度遮挡
+function REaddCustomPotShp(strShpName, vPos, uPotSize, uClr, cTextInfo, fASDist, fVisDist, bContactSce){
+  var _textbias =[0,0]; var _GolFontID ="RealBIMFont001"; var _textcolor =0xffffffff; var _textbordercolor =0xffffffff;
+  if(typeof cTextInfo.textbias != 'undefined'){_textbias = cTextInfo.textbias;}
+  if(typeof cTextInfo.fontname != 'undefined'){_GolFontID = cTextInfo.fontname;}
+  if(typeof cTextInfo.textcolor != 'undefined'){_textcolor = cTextInfo.textcolor;}
+  if(typeof cTextInfo.textbordercolor != 'undefined'){_textbordercolor = cTextInfo.textbordercolor;}
+  var TempTextRect =[-1, -1, 1, 1]; var TempTextFmtFlag =0x40/*TEXT_FMT_NOCLIP*/;
+  if(_textbias[0] < 0){
+      TempTextRect[0] =-uPotSize-2; TempTextRect[2] =-uPotSize-1; TempTextFmtFlag |=0x20/*TEXT_FMT_RIGHT*/;
+  }else if(_textbias[0] == 0){
+      TempTextRect[0] =-1; TempTextRect[2] =1; TempTextFmtFlag |=0x10/*TEXT_FMT_HCENTER*/;
+  }else{
+      TempTextRect[0] =uPotSize+1; TempTextRect[2] =uPotSize+2; TempTextFmtFlag |=0x8/*TEXT_FMT_LEFT*/;
   }
-  Module.RealBIMWeb.CreateCustomPolyline(strLineName,temparrpos,uLineClr,fDist);
-}
-// 创建矢量面
-//strRgnName：表示添加的折线对象的id，字符串类型，全局唯一，如有重复则后添加的会替代先添加的折线对象
-//arrPos:折线对象的顶点坐标数组
-//uRgnClr:折线对象的颜色,十六进制，分别表示ABGR,例如红色半透明是0x800000ff
-//fDist:折线对象的可视距离
-function RECreateCustomPolyRgn(strRgnName,arrPos,uRgnClr,fDist){
-  var temparrpos =new Module.RE_Vector_vec3();
-  for(var i=0;i<arrPos.length;++i){
-    temparrpos.push_back(arrPos[i]);
+  if(_textbias[1] < 0){
+      TempTextRect[1] =-uPotSize-2; TempTextRect[3] =-uPotSize-1; TempTextFmtFlag |=0x4/*TEXT_FMT_TOP*/;
+  }else if(_textbias[1] == 0){
+      TempTextRect[1] =-1; TempTextRect[3] =1; TempTextFmtFlag |=0x2/*TEXT_FMT_VCENTER*/;
+  }else{
+      TempTextRect[1] =uPotSize+1; TempTextRect[3] =uPotSize+2; TempTextFmtFlag |=0x1/*TEXT_FMT_BOTTOM*/;
   }
-  Module.RealBIMWeb.CreateCustomPolyRgn(strRgnName,temparrpos,uRgnClr,fDist);
+  var textobj ={
+    m_strGolFontID: _GolFontID,
+    m_bTextWeight: false,
+    m_strText: cTextInfo.textinfo,
+    m_uTextClr: _textcolor,
+    m_uTextBorderClr: _textbordercolor,
+    m_qTextRect: TempTextRect,
+    m_uTextFmtFlag: TempTextFmtFlag
+  };
+  var _bContactSce =false;
+  if(typeof bContactSce != 'undefined'){_bContactSce = bContactSce;}
+  return Module.RealBIMWeb.AddCustomPotShp(strShpName, vPos, uPotSize, uClr, textobj, fASDist, fVisDist, _bContactSce);
 }
+//创建自定义多边形折线矢量
+//strShpName：表示矢量标识名，若已有同名的矢量则覆盖之
+//arrPots：表示多边形折线序列
+//uFillState：0->多边形不填充；1->多边形首尾相连构成封闭区域进行填充；2->多边形首尾相连构成封闭区域进行填充(顶点高度自动修改为同一高度)
+//uClr：表示多边形的颜色
+//uFillClr：表示多边形的填充颜色
+//fTextPos：表示多边形的文字标注的位置
+//			>=0时整数部分i/小数部分j表示文字定位点在线段<i,i+1>上的偏移了长度百分比j
+//			[-1,0)表示文字定位在折线上并从首端点偏移折线总长度的百分比
+//			-2表示文字定位在多边形所有顶点的中心位置处
+//cTextInfo：表示顶点的文字标注信息
+//fASDist：表示屏幕空间矢量的自动缩放起始距离
+//fVisDist：表示屏幕空间矢量的可视距离
+//bContactSce：表示矢量是否与场景发生深度遮挡
+function REaddCustomPolylineShp(strShpName, arrPots, uFillState, uClr, uFillClr, fTextPos, cTextInfo, fASDist, fVisDist, bContactSce){ 
+  var temparrpos =new Module.RE_Vector_dvec3();
+  for(var i=0;i<arrPots.length;++i){
+    temparrpos.push_back(arrPots[i]);
+  }
+  var _textbias =[0,0]; var _GolFontID ="RealBIMFont001"; var _textcolor =0xffffffff; var _textbordercolor =0xffffffff;
+  if(typeof cTextInfo.textbias != 'undefined'){_textbias = cTextInfo.textbias;}
+  if(typeof cTextInfo.fontname != 'undefined'){_GolFontID = cTextInfo.fontname;}
+  if(typeof cTextInfo.textcolor != 'undefined'){_textcolor = cTextInfo.textcolor;}
+  if(typeof cTextInfo.textbordercolor != 'undefined'){_textbordercolor = cTextInfo.textbordercolor;}
+  var TempTextRect =[-1, -1, 1, 1]; var TempTextFmtFlag =0x40/*TEXT_FMT_NOCLIP*/;
+  if(_textbias[0] < 0){
+      TempTextRect[0] =-1; TempTextRect[2] =0; TempTextFmtFlag |=0x20/*TEXT_FMT_RIGHT*/;
+  }else if(_textbias[0] == 0){
+      TempTextRect[0] =-1; TempTextRect[2] =1; TempTextFmtFlag |=0x8/*TEXT_FMT_LEFT*/;
+  }else{
+      TempTextRect[0] =0; TempTextRect[2] =1; TempTextFmtFlag |=0x8/*TEXT_FMT_LEFT*/;
+  }
+  if(_textbias[1] < 0){
+      TempTextRect[1] =-1; TempTextRect[3] =0; TempTextFmtFlag |=0x4/*TEXT_FMT_TOP*/;
+  }else if(_textbias[1] == 0){
+      TempTextRect[1] =-1; TempTextRect[3] =1; TempTextFmtFlag |=0x1/*TEXT_FMT_BOTTOM*/;
+  }else{
+      TempTextRect[1] =0; TempTextRect[3] =1; TempTextFmtFlag |=0x1/*TEXT_FMT_BOTTOM*/;
+  }
+  var textobj ={
+    m_strGolFontID: _GolFontID,
+    m_bTextWeight: false,
+    m_strText: cTextInfo.textinfo,
+    m_uTextClr: _textcolor,
+    m_uTextBorderClr: _textbordercolor,
+    m_qTextRect: TempTextRect,
+    m_uTextFmtFlag: TempTextFmtFlag
+  };
+  var _bContactSce =false;
+  if(typeof bContactSce != 'undefined'){_bContactSce = bContactSce;}
+  return Module.RealBIMWeb.AddCustomPolylineShp(strShpName, temparrpos, uFillState, uClr, uFillClr, fTextPos, textobj, fASDist, fVisDist, _bContactSce);
+}
+//删除某个自定义矢量对象
+function REdelCustomShp(strShpName){ 
+  return Module.RealBIMWeb.DelCustomShp(strShpName);
+}
+//清空所有的自定义矢量对象
+function REdelAllCustomShps(){ 
+  Module.RealBIMWeb.DelAllCustomShps();
+}
+
 
 //设置相机位置的世界空间范围
 //[[Xmin、Ymin、Zmin],[Xmax、Ymax、Zmax]]
